@@ -39,7 +39,7 @@ class RaptorPipeline:
         min_cluster_size: int = 2,
         max_cluster_tokens: int = 8000,
     ) -> RaptorTree:
-        from ingesion.pdf_parser import parse_pdf
+        from ingestion.pdf_parser import parse_pdf
 
         chunks     = parse_pdf(pdf_path)
         embedder   = self._get_embedder()
@@ -89,7 +89,7 @@ class RaptorPipeline:
 
         return assemble_context(nodes, max_tokens)
 
-    # FIASS Integration
+    # FAISS Integration
     def _build_faiss_index(self) -> None:
         try:
             import faiss

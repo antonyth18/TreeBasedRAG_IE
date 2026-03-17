@@ -6,7 +6,7 @@ from openai import OpenAI, APIConnectionError, APIError
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = "You are a Summarizing Text Portal"
+_SYSTEM_PROMPT = "You are an expert at summarizing technical text concisely while preserving key details. Write a summary that captures the main points and important information from the provided context."
 _USER_TEMPLATE = "Write a summary of the following, including as many key details as possible: {context}"
 _OLLAMA_BASE_URL = "http://localhost:11434/v1"
 
