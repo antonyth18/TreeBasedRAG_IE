@@ -85,12 +85,24 @@ class LLMSummarizer:
     def _verify_connection(self) -> None:
         try:
             model_ids = [m.id for m in self._client.models.list().data]
-            if self.model not in model_ids:
+            resolved_model = None
+            if self.model in model_ids:
+                resolved_model = self.model
+            else:
+                tagged_matches = [mid for mid in model_ids if mid.startswith(f"{self.model}:")]
+                if tagged_matches:
+                    resolved_model = tagged_matches[0]
+
+            if resolved_model is None:
                 raise OllamaConnectionError(
                     f"Model '{self.model}' not found in Ollama.\n"
                     f"Available: {model_ids}\n"
                     f"Run: ollama pull {self.model}"
                 )
+            if resolved_model != self.model:
+                logger.info(f"Resolved Ollama model '{self.model}' -> '{resolved_model}'")
+                self.model = resolved_model
+
             logger.info(f"Ollama OK  |  model='{self.model}'")
         except APIConnectionError as e:
             raise OllamaConnectionError(
