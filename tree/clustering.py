@@ -7,7 +7,7 @@ from sklearn.exceptions import ConvergenceWarning
 from sklearn.mixture import GaussianMixture
 from umap import UMAP
 
-from node import RaptorNode
+from tree.node import RaptorNode
 
 logger = logging.getLogger(__name__)
 

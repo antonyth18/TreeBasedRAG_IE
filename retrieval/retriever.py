@@ -3,7 +3,7 @@ from typing import List, Optional
 
 import numpy as np
 
-from node import RaptorNode, RaptorTree
+from tree.node import RaptorNode, RaptorTree
 
 logger = logging.getLogger(__name__)
 

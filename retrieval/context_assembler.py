@@ -3,7 +3,7 @@ from typing import List
 
 import tiktoken
 
-from node import RaptorNode
+from tree.node import RaptorNode
 
 logger = logging.getLogger(__name__)
 

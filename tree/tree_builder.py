@@ -3,10 +3,10 @@ from typing import List, Optional
 
 import tiktoken
 
-from clustering import cluster_nodes
-from node import RaptorNode, RaptorTree
-from summarization import LLMSummarizer
-from tree_serializer import save_tree
+from tree.clustering import cluster_nodes
+from tree.node import RaptorNode, RaptorTree
+from tree.summarization import LLMSummarizer
+from tree.tree_serializer import save_tree
 
 logger = logging.getLogger(__name__)
 

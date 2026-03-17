@@ -3,12 +3,12 @@ from typing import Literal, Optional
 
 import numpy as np
 
-from context_assembler import assemble_context
-from retriever import retrieve_collapsed_tree, retrieve_tree_traversal
-from node import RaptorTree
-from summarization import LLMSummarizer
-from tree_builder import build_tree
-from tree_serializer import load_tree
+from retrieval.context_assembler import assemble_context
+from retrieval.retriever import retrieve_collapsed_tree, retrieve_tree_traversal
+from tree.node import RaptorTree
+from tree.summarization import LLMSummarizer
+from tree.tree_builder import build_tree
+from tree.tree_serializer import load_tree
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class RaptorPipeline:
         min_cluster_size: int = 2,
         max_cluster_tokens: int = 8000,
     ) -> RaptorTree:
-        from pdf_parser import parse_pdf
+        from ingesion.pdf_parser import parse_pdf
 
         chunks     = parse_pdf(pdf_path)
         embedder   = self._get_embedder()
@@ -120,7 +120,7 @@ class RaptorPipeline:
 
     def _get_embedder(self):
         if self._embedder is None:
-            from embedder import SBERTEmbedder
+            from embedding.embedder import SBERTEmbedder
             self._embedder = SBERTEmbedder(self.embed_model)
         return self._embedder
 
