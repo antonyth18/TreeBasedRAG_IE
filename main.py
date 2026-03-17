@@ -2,7 +2,7 @@ import os
 
 from pipeline import RaptorPipeline
 
-PDF_PATH = "./data/sample.pdf"
+PDF_PATH = "./data/datafile.pdf"
 TREE_PATH = "./my_tree"
 
 
