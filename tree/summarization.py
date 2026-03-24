@@ -6,18 +6,62 @@ from openai import OpenAI, APIConnectionError, APIError
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = "You are an expert at summarizing technical text concisely while preserving key details. Write a summary that captures the main points and important information from the provided context."
-_USER_TEMPLATE = "Write a summary of the following, including as many key details as possible: {context}"
+# ── Prompts ────────────────────────────────────────────────────────────────────
+
+_SYSTEM_PROMPT = """You are a precise technical summarizer. Your only job is to
+condense the provided text into a shorter summary.
+
+STRICT RULES:
+- Only include facts, claims, and relationships that are explicitly stated in
+  the provided text
+- Do not infer, imply, or add any information not directly present in the input
+- Do not connect concepts unless the text explicitly connects them
+- If the text appears to be a citation, caption, or footnote, summarize it as is. Do not reject it or output meta-commentary like "There is no text to summarize".
+- If the text is ambiguous or unclear, reflect that ambiguity — do not resolve
+  it with outside knowledge
+- Do not add explanatory context from your training knowledge
+- If you are unsure whether a detail is in the text or from your own knowledge,
+  leave it out"""
+
+_USER_TEMPLATE = """Summarize ONLY the following text. Do not add any information
+beyond what is written below.
+
+TEXT TO SUMMARIZE:
+{context}
+
+SUMMARY (only facts present in the text above):"""
+
+_VERIFICATION_SYSTEM_PROMPT = """You are a strict fact-checker. Your job is to 
+verify whether a summary contains only information present in a source text.
+Reply with exactly one of these two formats and nothing else:
+PASS
+FAIL: [quote the specific claim not found in source]"""
+
+_VERIFICATION_USER_TEMPLATE = """SOURCE TEXT:
+{source}
+
+SUMMARY TO CHECK:
+{summary}
+
+Does the summary contain ANY information, connections, or claims not explicitly
+present in the source text? Reply PASS or FAIL: [specific claim]"""
+
 _OLLAMA_BASE_URL = "http://localhost:11434/v1"
 
 
-# Errors
+# ── Errors ─────────────────────────────────────────────────────────────────────
+
 class SummaryError(Exception):
     pass
 
 class OllamaConnectionError(Exception):
     pass
 
+class FaithfulnessError(Exception):
+    pass
+
+
+# ── Summarizer ─────────────────────────────────────────────────────────────────
 
 class LLMSummarizer:
     def __init__(
@@ -27,20 +71,82 @@ class LLMSummarizer:
         max_summary_tokens: int = 200,
         max_retries: int = 3,
         retry_delay: float = 2.0,
+        verify_faithfulness: bool = True,       # toggle verification on/off
+        max_verification_retries: int = 2,      # how many times to retry a failed summary
     ):
-        self.model              = model
-        self.max_summary_tokens = max_summary_tokens
-        self.max_retries        = max_retries
-        self.retry_delay        = retry_delay
-        self._total_tokens_used = 0
-        self._client            = OpenAI(base_url=base_url, api_key="ollama")
+        self.model                     = model
+        self.max_summary_tokens        = max_summary_tokens
+        self.max_retries               = max_retries
+        self.retry_delay               = retry_delay
+        self.verify_faithfulness       = verify_faithfulness
+        self.max_verification_retries  = max_verification_retries
+        self._total_tokens_used        = 0
+        self._faithfulness_failures    = 0      # track how often verification catches issues
+        self._client                   = OpenAI(base_url=base_url, api_key="ollama")
         self._verify_connection()
 
-    # Summarisation with retires and error handling. Returns summary string.
+    # ── Public ─────────────────────────────────────────────────────────────────
+
     def summarize(self, texts: List[str]) -> str:
+        """
+        Summarize a list of text chunks into a single faithful summary.
+        If verify_faithfulness=True, checks the summary against the source
+        and retries if hallucinated claims are detected.
+        """
+        context = "\n\n".join(texts)
+
+        # If verification is off, just summarize once normally
+        if not self.verify_faithfulness:
+            return self._generate_summary(context)
+
+        # If verification is on, retry the summary until it passes or we give up
+        last_summary = None
+        for attempt in range(1, self.max_verification_retries + 1):
+            summary = self._generate_summary(context)
+            passed, failed_claim = self._check_faithfulness(context, summary)
+
+            if passed:
+                if attempt > 1:
+                    logger.info(f"Summary passed faithfulness check on attempt {attempt}.")
+                return summary
+
+            # Verification failed — log it and retry
+            self._faithfulness_failures += 1
+            logger.warning(
+                f"Faithfulness check failed (attempt {attempt}/{self.max_verification_retries}). "
+                f"Hallucinated claim: '{failed_claim}'. Retrying summary..."
+            )
+            last_summary = summary
+
+        # All verification retries exhausted — log and return last summary with warning
+        # We return rather than raise so tree building isn't blocked entirely,
+        # but the warning makes it visible in logs for manual review
+        logger.error(
+            f"Summary failed faithfulness verification after {self.max_verification_retries} "
+            f"attempts. Returning last summary for manual review. "
+            f"Last failed claim: '{failed_claim}'"
+        )
+        return last_summary
+
+    @property
+    def total_tokens_used(self) -> int:
+        return self._total_tokens_used
+
+    @property
+    def faithfulness_failures(self) -> int:
+        """How many times verification caught a hallucination across all summaries."""
+        return self._faithfulness_failures
+
+    # ── Private ────────────────────────────────────────────────────────────────
+
+    def _generate_summary(self, context: str) -> str:
+        """
+        Core summarization call with retry logic for API errors.
+        Unchanged from original except using updated prompts.
+        """
         messages = [
             {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user",   "content": _USER_TEMPLATE.format(context="\n\n".join(texts))},
+            {"role": "user",   "content": _USER_TEMPLATE.format(context=context)},
         ]
 
         last_error = None
@@ -57,7 +163,7 @@ class LLMSummarizer:
 
                 summary = (response.choices[0].message.content or "").strip()
                 if not summary:
-                    raise SummaryError("Empty Summary returned.")
+                    raise SummaryError("Empty summary returned.")
 
                 if response.usage:
                     self._total_tokens_used += response.usage.total_tokens
@@ -72,15 +178,57 @@ class LLMSummarizer:
 
             except APIError as e:
                 last_error = e
-                logger.warning(f"Ollama API error (attempt {attempt}/{self.max_retries}): {e}. Retrying in {delay:.1f}s...")
+                logger.warning(
+                    f"Ollama API error (attempt {attempt}/{self.max_retries}): {e}. "
+                    f"Retrying in {delay:.1f}s..."
+                )
                 time.sleep(delay)
                 delay *= 2
 
-        raise SummaryError(f"Summarisation failed after {self.max_retries} attempts. Last error: {last_error}")
+        raise SummaryError(
+            f"Summarization failed after {self.max_retries} attempts. "
+            f"Last error: {last_error}"
+        )
 
-    @property
-    def total_tokens_used(self) -> int:
-        return self._total_tokens_used
+    def _check_faithfulness(self, source: str, summary: str) -> tuple[bool, str]:
+        """
+        Sends the source text and summary to the LLM for faithfulness verification.
+        Returns (True, "") if the summary passes.
+        Returns (False, failed_claim) if the summary contains hallucinated content.
+        """
+        messages = [
+            {"role": "system", "content": _VERIFICATION_SYSTEM_PROMPT},
+            {"role": "user",   "content": _VERIFICATION_USER_TEMPLATE.format(
+                source=source,
+                summary=summary,
+            )},
+        ]
+
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=100,         # verification responses are short
+                temperature=0.0,
+            )
+
+            verdict = (response.choices[0].message.content or "").strip()
+
+            if response.usage:
+                self._total_tokens_used += response.usage.total_tokens
+
+            if verdict.upper().startswith("PASS"):
+                return True, ""
+
+            # Extract the failed claim from "FAIL: [claim]"
+            failed_claim = verdict[5:].strip() if verdict.upper().startswith("FAIL:") else verdict
+            return False, failed_claim
+
+        except (APIConnectionError, APIError) as e:
+            # If verification itself fails, log and pass through rather than
+            # blocking tree construction entirely
+            logger.warning(f"Faithfulness verification call failed: {e}. Skipping check.")
+            return True, ""
 
     def _verify_connection(self) -> None:
         try:

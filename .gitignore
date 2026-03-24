@@ -1,6 +1,39 @@
-venv/
-.env/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+venv/
+.venv/
+.env/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / Frontend
+node_modules/
+dist/
+build/
+.next/
+.cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDEs / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific (Document Data & Trees)
 my_tree/
 data/
+uploads/
+*.pdf
+*.json
+!package.json
+!tsconfig.json
