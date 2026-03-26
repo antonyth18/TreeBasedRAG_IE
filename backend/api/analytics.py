@@ -15,7 +15,7 @@ async def get_retrieval_summary(query_id: str):
     # Analyze nodes by level
     level_counts = {}
     for node in nodes:
-        lvl = node.level
+        lvl = node.layer
         level_counts[lvl] = level_counts.get(lvl, 0) + 1
         
     levels_summary = [

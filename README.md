@@ -31,6 +31,8 @@ pip install -r requirements.txt
 pip install python-multipart uvicorn fastapi pydantic
 ```
 
+---
+
 ### 3. Running the Server
 **Important**: You must include the current directory in your `PYTHONPATH`.
 ```bash

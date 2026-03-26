@@ -30,8 +30,9 @@ def reduce_dimensions(
         n_components=n_components,      # target dimensionality for GMM clustering
         n_neighbors=n_neighbors,        # larger n_neighbors = broader global topics, smaller n_neighbors = finer local topics
         metric="cosine",                # use cosine similarity
-        random_state=random_state,      # for reproducibility
+        random_state=None,              # Set to None to enable Numba parallel threading in UMAP (n_jobs=-1)
         low_memory=False,               # UMAP's default is True for large datasets, but it can cause convergence issues. Setting to False can improve stability at the cost of higher memory usage.
+        n_jobs=-1                       # Enforce all cores
     ).fit_transform(embeddings)
 
 
@@ -47,23 +48,28 @@ def select_cluster_count_bic(
     if max_k < 2:
         return 1
 
-    best_bic, best_k = np.inf, 1
+    import concurrent.futures
 
-    for k in range(1, max_k + 1):
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", ConvergenceWarning)
+    def fit_and_score(k):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", ConvergenceWarning)
+            try:
                 gmm = GaussianMixture(n_components=k, covariance_type="full",
                                       random_state=random_state, n_init=1)
                 gmm.fit(reduced)
-                bic = gmm.bic(reduced)
+                return k, gmm.bic(reduced)
+            except Exception as e:
+                logger.debug(f"GMM fit failed at k={k}: {e}.")
+                return k, np.inf
 
+    best_bic, best_k = np.inf, 1
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {executor.submit(fit_and_score, k): k for k in range(1, max_k + 1)}
+        for future in concurrent.futures.as_completed(futures):
+            k, bic = future.result()
             if bic < best_bic:
                 best_bic, best_k = bic, k
-
-        except Exception as e:
-            logger.warning(f"GMM fit failed at k={k}: {e}. Stopping BIC search.")
-            break
 
     logger.debug(f"BIC selected k={best_k}  (BIC={best_bic:.2f})")
     return best_k
