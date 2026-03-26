@@ -43,6 +43,39 @@ The backend will be available at `http://localhost:8000`.
 
 ---
 
+### 4. Optimizing Ollama Concurrency
+To speed up the RAPTOR tree-building process, the pipeline summarizes document clusters concurrently. You **must** configure Ollama to allow parallel requests.
+
+Set the `OLLAMA_NUM_PARALLEL` environment variable based on your system's available Unified Memory (Mac) or GPU VRAM (Windows/Linux) before starting the Ollama server:
+
+- **< 8GB VRAM / RAM:** `OLLAMA_NUM_PARALLEL=1` (Sequential fallback for smaller systems)
+- **8GB - 12GB VRAM:** `OLLAMA_NUM_PARALLEL=2` (Recommended for RTX 3060/4060 or Apple M1/M2/M3 base models)
+- **16GB - 24GB VRAM:** `OLLAMA_NUM_PARALLEL=4` (Recommended for RTX 3090/4090, Radeon RX 7900, or Apple Pro/Max chips)
+- **32GB+ VRAM:** `OLLAMA_NUM_PARALLEL=6` or higher
+
+**Mac / Linux Terminal:**
+```bash
+# Stop any existing Ollama instance first, then:
+export OLLAMA_NUM_PARALLEL=2
+ollama serve
+```
+* **MacOS App Users:** You can permanently set this globally by running `launchctl setenv OLLAMA_NUM_PARALLEL 2` in your terminal and restarting the Ollama Mac App.
+* **Linux Service Users:** Run `systemctl edit ollama.service`, add `Environment="OLLAMA_NUM_PARALLEL=2"` under `[Service]`, and restart the service via `systemctl restart ollama`.
+
+**Windows:**
+```powershell
+# PowerShell
+$env:OLLAMA_NUM_PARALLEL="2"
+ollama serve
+
+# Command Prompt
+set OLLAMA_NUM_PARALLEL=2
+ollama serve
+```
+* **Windows App Users:** To set this globally, search for "Environment Variables" in your Windows Start Menu. Add a new System Variable named `OLLAMA_NUM_PARALLEL` with the value `2`, click OK, and completely restart the Ollama tray app.
+
+---
+
 ## 💻 Frontend Setup (React + Vite)
 
 ### 1. Prerequisites
