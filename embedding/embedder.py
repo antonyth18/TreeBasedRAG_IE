@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class SBERTEmbedder:
-    MODEL = "multi-qa-mpnet-base-cos-v1"
+    MODEL = "BAAI/bge-m3"
 
     def __init__(self, model_name: str = MODEL):
         self.MODEL  = model_name

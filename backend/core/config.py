@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     
     # LLM Config
     DEFAULT_LLM_MODEL: str = "llama3.2"
+    SUMMARY_MODEL: str = "llama3.2"
+    SUMMARY_MAX_TOKENS: int = 128
+    SUMMARY_MAX_RETRIES: int = 1
+    SUMMARY_RETRY_DELAY: float = 0.5
+    SUMMARY_VERIFY_FAITHFULNESS: bool = False
+    SUMMARY_MAX_VERIFICATION_RETRIES: int = 1
+    OLLAMA_NUM_CTX: int = 8192
     
     class Config:
         case_sensitive = True

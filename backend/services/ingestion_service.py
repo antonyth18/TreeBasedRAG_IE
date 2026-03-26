@@ -37,7 +37,15 @@ class IngestionService:
                 f.write(file_content)
         
         # Initialize RaptorPipeline
-        pipeline = RaptorPipeline(llm_model=settings.DEFAULT_LLM_MODEL)
+        pipeline = RaptorPipeline(
+            llm_model=settings.DEFAULT_LLM_MODEL,
+            summary_model=settings.SUMMARY_MODEL,
+            summary_max_tokens=settings.SUMMARY_MAX_TOKENS,
+            summary_max_retries=settings.SUMMARY_MAX_RETRIES,
+            summary_retry_delay=settings.SUMMARY_RETRY_DELAY,
+            summary_verify_faithfulness=settings.SUMMARY_VERIFY_FAITHFULNESS,
+            summary_max_verification_retries=settings.SUMMARY_MAX_VERIFICATION_RETRIES,
+        )
         tree_path = os.path.join(settings.TREES_DIR, f"{document_id}.json")
         
         # Add to pipeline service

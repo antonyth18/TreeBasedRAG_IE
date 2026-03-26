@@ -97,12 +97,20 @@ class LLMSummarizer:
 
         # If verification is off, just summarize once normally
         if not self.verify_faithfulness:
-            return self._generate_summary(context)
+            try:
+                return self._generate_summary(context)
+            except SummaryError as e:
+                logger.warning(f"LLM summarization failed, using fallback summary: {e}")
+                return self._fallback_summary(context)
 
         # If verification is on, retry the summary until it passes or we give up
         last_summary = None
         for attempt in range(1, self.max_verification_retries + 1):
-            summary = self._generate_summary(context)
+            try:
+                summary = self._generate_summary(context)
+            except SummaryError as e:
+                logger.warning(f"LLM summarization failed on attempt {attempt}, using fallback summary: {e}")
+                summary = self._fallback_summary(context)
             passed, failed_claim = self._check_faithfulness(context, summary)
 
             if passed:
@@ -176,6 +184,15 @@ class LLMSummarizer:
                     f"Is 'ollama serve' still running?\n{e}"
                 ) from e
 
+            except SummaryError as e:
+                last_error = e
+                logger.warning(
+                    f"Summary generation returned empty output (attempt {attempt}/{self.max_retries}). "
+                    f"Retrying in {delay:.1f}s..."
+                )
+                time.sleep(delay)
+                delay *= 2
+
             except APIError as e:
                 last_error = e
                 logger.warning(
@@ -189,6 +206,20 @@ class LLMSummarizer:
             f"Summarization failed after {self.max_retries} attempts. "
             f"Last error: {last_error}"
         )
+
+    def _fallback_summary(self, context: str, max_chars: int = 800) -> str:
+        text = " ".join(context.split())
+        if not text:
+            return "No content to summarize."
+
+        if len(text) <= max_chars:
+            return text
+
+        # Prefer sentence boundary near limit.
+        cutoff = text.rfind(". ", 0, max_chars)
+        if cutoff == -1:
+            cutoff = max_chars
+        return text[:cutoff].strip() + "..."
 
     def _check_faithfulness(self, source: str, summary: str) -> tuple[bool, str]:
         """

@@ -26,7 +26,7 @@ def _tree_exists(tree_path: str) -> bool:
 
 def main() -> None:
     pipe = RaptorPipeline(
-        embed_model         = "multi-qa-mpnet-base-cos-v1",
+        embed_model         = "BAAI/bge-m3",
         llm_model           = "llama3.2",
         max_tokens          = 3000,
         mmr_threshold       = 0.75,   # tighten to 0.70 if redundancy persists

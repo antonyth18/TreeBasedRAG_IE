@@ -1,6 +1,6 @@
 import { FolderTree, Layers, Activity } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getTreeSummary, getRetrievalSummary } from "../../lib/api";
+import { getTreeSummary, getRetrievalSummary, getDocumentStatus } from "../../lib/api";
 
 interface TreeLevelSummary {
   level: number;
@@ -23,26 +23,59 @@ export function TreeVisualization({ documentId, queryId }: TreeVisualizationProp
   const [summary, setSummary] = useState<TreeSummary | null>(null);
   const [retrievalStats, setRetrievalStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [buildStatus, setBuildStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!documentId) {
       setSummary(null);
+      setBuildStatus(null);
       return;
     }
+
+    let isMounted = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const loadTreeData = async () => {
       setIsLoading(true);
       try {
         const data = await getTreeSummary(documentId);
+        if (!isMounted) return;
         setSummary(data);
-      } catch (error) {
-        console.error("Error loading tree summary:", error);
+        setBuildStatus("completed");
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      } catch {
+        try {
+          const status = await getDocumentStatus(documentId);
+          if (!isMounted) return;
+          setBuildStatus(status.status || "processing");
+          if (typeof status.status === "string" && status.status.toLowerCase().startsWith("failed")) {
+            if (intervalId) {
+              clearInterval(intervalId);
+              intervalId = null;
+            }
+          }
+        } catch (statusError) {
+          console.error("Error loading tree summary/status:", statusError);
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadTreeData();
+    intervalId = setInterval(loadTreeData, 3000);
+
+    return () => {
+      isMounted = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, [documentId]);
 
   useEffect(() => {
@@ -76,7 +109,11 @@ export function TreeVisualization({ documentId, queryId }: TreeVisualizationProp
         </div>
       ) : !summary ? (
         <div className="flex h-40 items-center justify-center text-sm text-[#B0BEC5] text-center px-4">
-          Select a document to see its hierarchical structure.
+          {buildStatus && buildStatus.toLowerCase().startsWith("failed")
+            ? `Tree build failed: ${buildStatus}`
+            : buildStatus && buildStatus !== "completed"
+            ? `Document is ${buildStatus}. Building tree...`
+            : "Select a document to see its hierarchical structure."}
         </div>
       ) : (
         <div className="space-y-6">

@@ -2,6 +2,7 @@ import logging
 import time
 
 from openai import OpenAI, APIConnectionError, APIError
+from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -77,11 +78,13 @@ class LLMGenerator:
         base_url: str = "http://localhost:11434/v1",
         max_answer_tokens: int = 800,
         temperature: float = 0.0,
+        num_ctx: int = settings.OLLAMA_NUM_CTX,
     ):
         self.model = model
         self.base_url = base_url
         self.max_answer_tokens = max_answer_tokens
         self.temperature = temperature
+        self.num_ctx = num_ctx
         self._total_tokens_used = 0
         
         self.max_retries = 3
@@ -125,6 +128,7 @@ class LLMGenerator:
                     messages=messages,
                     max_tokens=self.max_answer_tokens,
                     temperature=self.temperature,
+                    extra_body={"options": {"num_ctx": self.num_ctx}},
                 )
 
                 answer = (response.choices[0].message.content or "").strip()

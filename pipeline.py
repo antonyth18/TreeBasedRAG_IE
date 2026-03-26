@@ -1,5 +1,6 @@
 import logging
 import re
+import os
 from typing import Literal, Optional
 
 import numpy as np
@@ -19,8 +20,14 @@ logger = logging.getLogger(__name__)
 class RaptorPipeline:
     def __init__(
         self,
-        embed_model: str = "multi-qa-mpnet-base-cos-v1",
+        embed_model: str = "BAAI/bge-m3",
         llm_model: str = "llama3.2",
+        summary_model: Optional[str] = None,
+        summary_max_tokens: int = 128,
+        summary_max_retries: int = 1,
+        summary_retry_delay: float = 0.5,
+        summary_verify_faithfulness: bool = False,
+        summary_max_verification_retries: int = 1,
         max_tokens: int = 2000,
         use_faiss: bool = False,
         mmr_threshold: float = 0.75,
@@ -30,6 +37,12 @@ class RaptorPipeline:
     ):
         self.embed_model          = embed_model
         self.llm_model            = llm_model
+        self.summary_model        = summary_model or llm_model
+        self.summary_max_tokens   = summary_max_tokens
+        self.summary_max_retries  = summary_max_retries
+        self.summary_retry_delay  = summary_retry_delay
+        self.summary_verify_faithfulness = summary_verify_faithfulness
+        self.summary_max_verification_retries = summary_max_verification_retries
         self.max_tokens           = max_tokens
         self.use_faiss            = use_faiss
         self.mmr_threshold        = mmr_threshold
@@ -80,7 +93,14 @@ class RaptorPipeline:
 
         chunks     = parse_pdf(pdf_path, min_chunk_tokens=min_chunk_tokens)
         embedder   = self._get_embedder()
-        summarizer = LLMSummarizer(model=self.llm_model)
+        summarizer = LLMSummarizer(
+            model=self.summary_model,
+            max_summary_tokens=self.summary_max_tokens,
+            max_retries=self.summary_max_retries,
+            retry_delay=self.summary_retry_delay,
+            verify_faithfulness=self.summary_verify_faithfulness,
+            max_verification_retries=self.summary_max_verification_retries,
+        )
 
         self._tree = build_tree(
             chunks             = chunks,

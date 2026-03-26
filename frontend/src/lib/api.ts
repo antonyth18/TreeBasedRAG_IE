@@ -12,6 +12,10 @@ export async function fetchDocuments() {
   return fetch(`${API_BASE}/documents`).then(handleResponse);
 }
 
+export async function getDocumentStatus(documentId: string) {
+  return fetch(`${API_BASE}/documents/${documentId}/status`).then(handleResponse);
+}
+
 export async function uploadDocument(file: File) {
   const formData = new FormData();
   formData.append("file", file);
