@@ -1,9 +1,0 @@
-numpy
-scikit-learn
-umap-learn
-openai
-tiktoken
-faiss-cpu
-pymupdf
-spacy
-sentence-transformers

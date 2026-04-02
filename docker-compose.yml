@@ -1,0 +1,28 @@
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Connects to the host Mac's Ollama instance over the bridge
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    volumes:
+      # Mount data and my_tree to persist across container restarts
+      - ./data:/app/data
+      - ./my_tree:/app/my_tree
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:8000/api/v1
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend

@@ -12,90 +12,74 @@ A powerful Retrieval-Augmented Generation (RAG) system utilizing the **RAPTOR** 
 
 ---
 
-## 🛠️ Backend Setup (FastAPI)
+## 🐳 Quick Start (Docker - Recommended)
+
+The easiest way to run the system is using Docker Compose. This handles all dependencies, including the spaCy language models and environment configurations.
 
 ### 1. Prerequisites
-- Python 3.9+
+- Docker & Docker Desktop installed.
+- **Ollama** running on your host machine (Mac/Windows).
 
-### 2. Installation
+### 2. Launch
 ```bash
 # Navigate to project root
 cd TreeBasedRAG_IE
 
-# Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-pip install python-multipart uvicorn fastapi pydantic
+# Build and start in detached mode
+docker compose up --build -d
 ```
+
+### 3. Access
+* **Frontend**: [http://localhost:5173](http://localhost:5173)
+* **Backend API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+> [!TIP]
+> The system automatically bridges to your host machine's Ollama instance via `host.docker.internal`. Ensure Ollama is running and accessible.
 
 ---
 
-### 3. Running the Server
-**Important**: You must include the current directory in your `PYTHONPATH`.
-```bash
-export PYTHONPATH=$PYTHONPATH:.
-python3 -m uvicorn backend.main:app --reload
-```
-The backend will be available at `http://localhost:8000`.
+## 🛠️ Manual Development Setup
+
+If you prefer to run the services locally without Docker:
+
+### Backend (FastAPI)
+1. **Python 3.9+** is required.
+2. **Install Dependencies**:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   # Download the required spaCy model
+   python -m spacy download en_core_web_sm
+   ```
+3. **Run Server**:
+   ```bash
+   export PYTHONPATH=$PYTHONPATH:.
+   python3 -m uvicorn backend.main:app --reload
+   ```
+
+### Frontend (React + Vite)
+1. **Node.js v18+** is required.
+2. **Install & Run**:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   Available at `http://localhost:5173`.
 
 ---
 
-### 4. Optimizing Ollama Concurrency
-To speed up the RAPTOR tree-building process, the pipeline summarizes document clusters concurrently. You **must** configure Ollama to allow parallel requests.
+## 🛠️ Optimizing Ollama Concurrency
 
-Set the `OLLAMA_NUM_PARALLEL` environment variable based on your system's available Unified Memory (Mac) or GPU VRAM (Windows/Linux) before starting the Ollama server:
+To speed up the RAPTOR tree-building process, set the `OLLAMA_NUM_PARALLEL` environment variable **before** starting your Ollama server. This allows concurrent summarization of document clusters.
 
-- **< 8GB VRAM / RAM:** `OLLAMA_NUM_PARALLEL=1` (Sequential fallback for smaller systems)
-- **8GB - 12GB VRAM:** `OLLAMA_NUM_PARALLEL=2` (Recommended for RTX 3060/4060 or Apple M1/M2/M3 base models)
-- **16GB - 24GB VRAM:** `OLLAMA_NUM_PARALLEL=4` (Recommended for RTX 3090/4090, Radeon RX 7900, or Apple Pro/Max chips)
-- **32GB+ VRAM:** `OLLAMA_NUM_PARALLEL=6` or higher
+- **8GB - 12GB RAM**: `OLLAMA_NUM_PARALLEL=2`
+- **16GB - 24GB RAM**: `OLLAMA_NUM_PARALLEL=4`
+- **32GB+ RAM**: `OLLAMA_NUM_PARALLEL=6`
 
-**Mac / Linux Terminal:**
-```bash
-# Stop any existing Ollama instance first, then:
-export OLLAMA_NUM_PARALLEL=2
-ollama serve
-```
-* **MacOS App Users:** You can permanently set this globally by running `launchctl setenv OLLAMA_NUM_PARALLEL 2` in your terminal and restarting the Ollama Mac App.
-* **Linux Service Users:** Run `systemctl edit ollama.service`, add `Environment="OLLAMA_NUM_PARALLEL=2"` under `[Service]`, and restart the service via `systemctl restart ollama`.
-
-**Windows:**
-```powershell
-# PowerShell
-$env:OLLAMA_NUM_PARALLEL="2"
-ollama serve
-
-# Command Prompt
-set OLLAMA_NUM_PARALLEL=2
-ollama serve
-```
-* **Windows App Users:** To set this globally, search for "Environment Variables" in your Windows Start Menu. Add a new System Variable named `OLLAMA_NUM_PARALLEL` with the value `2`, click OK, and completely restart the Ollama tray app.
-
----
-
-## 💻 Frontend Setup (React + Vite)
-
-### 1. Prerequisites
-- Node.js (v18+)
-- npm or yarn
-
-### 2. Installation
-```bash
-# Navigate to frontend directory
-cd frontend
-
-# Install dependencies
-npm install
-```
-
-### 3. Running the Client
-```bash
-npm run dev
-```
-The frontend will be available at `http://localhost:5173`.
+**Mac Users**: 
+Run `launchctl setenv OLLAMA_NUM_PARALLEL 2` and restart the Ollama app.
 
 ---
 
