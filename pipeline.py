@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class RaptorPipeline:
     def __init__(
         self,
-        embed_model: str = "BAAI/bge-m3",
+        embed_model: str = "BAAI/bge-small-en-v1.5",
         llm_model: str = "llama3.2",
         summary_model: Optional[str] = None,
         summary_max_tokens: int = 128,
