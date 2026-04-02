@@ -57,8 +57,9 @@ async def _summarize_cluster_async(client, semaphore, node_id, texts, summarizer
             # --- GENERATION ---
             for generate_attempt in range(1, summarizer_instance.max_retries + 1):
                 try:
+                    base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
                     response = await client.post(
-                        "http://localhost:11434/api/generate",
+                        f"{base_url}/api/generate",
                         json={
                             "model": model,
                             "system": _SYSTEM_PROMPT,
@@ -92,8 +93,9 @@ async def _summarize_cluster_async(client, semaphore, node_id, texts, summarizer
             passed = False
             failed_claim = ""
             try:
+                base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
                 ver_response = await client.post(
-                    "http://localhost:11434/api/generate",
+                    f"{base_url}/api/generate",
                     json={
                         "model": model,
                         "system": _VERIFICATION_SYSTEM_PROMPT,

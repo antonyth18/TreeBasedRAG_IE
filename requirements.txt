@@ -1,0 +1,15 @@
+numpy
+scikit-learn
+umap-learn
+openai
+tiktoken
+faiss-cpu
+pymupdf
+spacy
+sentence-transformers
+fastapi
+uvicorn
+pydantic
+pydantic-settings
+python-multipart
+httpx

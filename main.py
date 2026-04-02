@@ -29,7 +29,7 @@ def main() -> None:
         embed_model         = "BAAI/bge-m3",
         llm_model           = "llama3.2",
         max_tokens          = 3000,
-        mmr_threshold       = 0.75,   # tighten to 0.70 if redundancy persists
+        mmr_threshold       = 0.75,   # tighten to 0.80 if redundancy persists
         relevance_threshold = 0.20,   # lowered to 0.30 to ensure specific leaf nodes pass the filter
         layer_score_threshold= 0.0,   # lowered to 0.0 so traversal always follows the strongest available branches to the leaves
         enable_generation   = True,
