@@ -1,5 +1,5 @@
-import { ChevronDown, ChevronUp, Layers } from "lucide-react";
 import { useEffect, useState } from "react";
+import { X, Layers, ChevronDown, ChevronUp } from "lucide-react";
 import { getRetrievedNodes } from "../../lib/api";
 
 interface RetrievedNode {
@@ -11,8 +11,9 @@ interface RetrievedNode {
   summary?: string | null;
 }
 
-interface RetrievalDetailsProps {
-  queryId: string | null;
+interface NodesModalProps {
+  queryId: string;
+  onClose: () => void;
 }
 
 function RetrievedNodeCard({ node }: { node: RetrievedNode }) {
@@ -38,7 +39,7 @@ function RetrievedNodeCard({ node }: { node: RetrievedNode }) {
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
+    <div className="rounded-lg border border-border bg-background p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="flex-1">
           <div className="mb-2 flex items-center gap-2">
@@ -82,21 +83,17 @@ function RetrievedNodeCard({ node }: { node: RetrievedNode }) {
   );
 }
 
-export function RetrievalDetails({ queryId }: RetrievalDetailsProps) {
+export function NodesModal({ queryId, onClose }: NodesModalProps) {
   const [nodes, setNodes] = useState<RetrievedNode[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!queryId) {
-      setNodes([]);
-      return;
-    }
+    if (!queryId) return;
 
     const loadNodes = async () => {
       setIsLoading(true);
       try {
         const data = await getRetrievedNodes(queryId);
-        // data.levels is an array of {level, nodes}
         const allNodes = (data.levels || []).flatMap((l: any) => l.nodes);
         setNodes(allNodes);
       } catch (error) {
@@ -110,32 +107,46 @@ export function RetrievalDetails({ queryId }: RetrievalDetailsProps) {
   }, [queryId]);
 
   return (
-    <div className="h-full overflow-auto rounded-xl border border-border bg-card p-5 shadow-sm">
-      <div className="mb-4 flex items-center gap-2 border-b border-border pb-3">
-        <Layers className="h-5 w-5 text-primary" />
-        <h2 className="font-medium text-foreground">Retrieved Nodes</h2>
-        {!isLoading && (
-          <span className="ml-auto rounded-full bg-primary/20 px-2.5 py-0.5 text-xs font-medium text-primary">
-            {nodes.length} nodes
-          </span>
-        )}
-      </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-lg bg-card">
+        {/* Header */}
+        <div className="sticky top-0 flex items-center justify-between border-b border-border bg-card px-6 py-4">
+          <div className="flex items-center gap-3">
+            <Layers className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">Retrieved Nodes</h2>
+            {!isLoading && (
+              <span className="ml-auto rounded-full bg-primary/20 px-2.5 py-0.5 text-xs font-medium text-primary">
+                {nodes.length} nodes
+              </span>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 hover:bg-muted"
+          >
+            <X className="h-5 w-5 text-muted-foreground" />
+          </button>
+        </div>
 
-      {isLoading ? (
-        <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-          Retrieving nodes...
+        {/* Content */}
+        <div className="p-6">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              Retrieving nodes...
+            </div>
+          ) : nodes.length === 0 ? (
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              No nodes retrieved.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {nodes.map((node, i) => (
+                <RetrievedNodeCard key={`${node.node_id}-${i}`} node={node} />
+              ))}
+            </div>
+          )}
         </div>
-      ) : nodes.length === 0 ? (
-        <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-          {queryId ? "No nodes retrieved." : "Run a query to see details."}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {nodes.map((node, i) => (
-            <RetrievedNodeCard key={`${node.node_id}-${i}`} node={node} />
-          ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
