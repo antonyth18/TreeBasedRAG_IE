@@ -21,8 +21,8 @@ class RaptorPipeline:
     def __init__(
         self,
         embed_model: str = "BAAI/bge-small-en-v1.5",
-        llm_model: str = "llama3.2",
-        summary_model: Optional[str] = None,
+        llm_model: str = "qwen3:8b",
+        summary_model: Optional[str] = "qwen2.5:3b",
         summary_max_tokens: int = 128,
         summary_max_retries: int = 1,
         summary_retry_delay: float = 0.5,
@@ -34,10 +34,13 @@ class RaptorPipeline:
         relevance_threshold: float = 0.45,
         layer_score_threshold: float = 0.3,
         enable_generation: bool = True,
+        enable_web_search: bool = False,
+        web_search_threshold: float = 0.35,
+        web_search_n_results: int = 3,
     ):
         self.embed_model          = embed_model
         self.llm_model            = llm_model
-        self.summary_model        = summary_model or llm_model
+        self.summary_model        = summary_model or "qwen2.5:3b"
         self.summary_max_tokens   = summary_max_tokens
         self.summary_max_retries  = summary_max_retries
         self.summary_retry_delay  = summary_retry_delay
@@ -49,10 +52,14 @@ class RaptorPipeline:
         self.relevance_threshold  = relevance_threshold
         self.layer_score_threshold = layer_score_threshold
         self.enable_generation    = enable_generation
+        self.enable_web_search    = enable_web_search
+        self.web_search_threshold = web_search_threshold
+        self.web_search_n_results = web_search_n_results
         self._tree                = None
         self._embedder            = None
         self._query_classifier    = None
         self._generator           = None
+        self._web_searcher        = None
         self._faiss_index         = None
         self._faiss_nodes         = None
         
@@ -226,6 +233,10 @@ class RaptorPipeline:
                         return context
                         
                     context = assemble_context(merged_nodes, max_tokens)
+
+                    if self.enable_web_search:
+                        context = self._maybe_augment_with_web(query, merged_nodes, context, max_tokens)
+
                     if self.enable_generation:
                         return self._get_generator().generate(context, query, query_type=query_type)
                     return context
@@ -261,6 +272,11 @@ class RaptorPipeline:
             return context
 
         context = assemble_context(nodes, max_tokens)
+
+        # Web search fallback — triggers when tree retrieval is insufficient
+        if self.enable_web_search:
+            context = self._maybe_augment_with_web(query, nodes, context, max_tokens)
+
         if self.enable_generation:
             return self._get_generator().generate(context, query, query_type=query_type)
         return context
@@ -376,6 +392,51 @@ class RaptorPipeline:
         if self._generator is None:
             self._generator = LLMGenerator(model=self.llm_model)
         return self._generator
+
+    def _get_web_searcher(self):
+        if self._web_searcher is None:
+            from retrieval.web_searcher import WebSearcher
+            self._web_searcher = WebSearcher(n_results=self.web_search_n_results)
+        return self._web_searcher
+
+    def _maybe_augment_with_web(
+        self,
+        query: str,
+        nodes: list,
+        context: str,
+        max_tokens: int,
+    ) -> str:
+        """
+        Checks if tree retrieval was insufficient. If so, fetches web snippets
+        and appends them to the context.
+
+        Insufficient = no nodes returned, OR best similarity score is below
+        web_search_threshold.
+        """
+        if not nodes:
+            logger.info("Web search triggered: no nodes returned from tree.")
+            should_search = True
+        else:
+            query_emb = self._get_embedder().encode_query(query)
+            best_score = float(max(float(np.dot(n.embedding, query_emb)) for n in nodes))
+            should_search = best_score < self.web_search_threshold
+            if should_search:
+                logger.info(
+                    f"Web search triggered: best node score {best_score:.3f} < threshold {self.web_search_threshold}"
+                )
+
+        if not should_search:
+            return context
+
+        snippets = self._get_web_searcher().search(query)
+        if not snippets:
+            return context
+
+        web_block = "\n\n=== Web Search Results ===\n" + "\n\n".join(snippets)
+        combined = context + web_block
+
+        logger.info(f"Web search: appended {len(snippets)} snippets to context")
+        return combined
 
     def __repr__(self) -> str:
         return (

@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     TREES_DIR: str = os.path.join(BASE_DIR, "my_tree")
     
     # LLM Config
-    DEFAULT_LLM_MODEL: str = "llama3.2"
-    SUMMARY_MODEL: str = "llama3.2"
+    DEFAULT_LLM_MODEL: str = "qwen3:8b"
+    SUMMARY_MODEL: str = "qwen2.5:3b"
     SUMMARY_MAX_TOKENS: int = 128
     SUMMARY_MAX_RETRIES: int = 1
     SUMMARY_RETRY_DELAY: float = 0.5

@@ -68,7 +68,7 @@ class FaithfulnessError(Exception):
 class LLMSummarizer:
     def __init__(
         self,
-        model: str = "llama3.2",
+        model: str = "qwen2.5:3b",
         base_url: str = _OLLAMA_BASE_URL,
         max_summary_tokens: int = 200,
         max_retries: int = 3,

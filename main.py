@@ -27,7 +27,8 @@ def _tree_exists(tree_path: str) -> bool:
 def main() -> None:
     pipe = RaptorPipeline(
         embed_model         = "BAAI/bge-small-en-v1.5",
-        llm_model           = "llama3.2",
+        llm_model           = "qwen3:8b",
+        summary_model       = "qwen2.5:3b",
         max_tokens          = 3000,
         mmr_threshold       = 0.75,   # tighten to 0.80 if redundancy persists
         relevance_threshold = 0.20,   # lowered to 0.30 to ensure specific leaf nodes pass the filter
