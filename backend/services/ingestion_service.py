@@ -45,6 +45,9 @@ class IngestionService:
             summary_retry_delay=settings.SUMMARY_RETRY_DELAY,
             summary_verify_faithfulness=settings.SUMMARY_VERIFY_FAITHFULNESS,
             summary_max_verification_retries=settings.SUMMARY_MAX_VERIFICATION_RETRIES,
+            enable_web_search=settings.ENABLE_WEB_SEARCH,
+            web_search_threshold=settings.WEB_SEARCH_THRESHOLD,
+            web_search_n_results=settings.WEB_SEARCH_N_RESULTS,
         )
         tree_path = os.path.join(settings.TREES_DIR, f"{document_id}.json")
         

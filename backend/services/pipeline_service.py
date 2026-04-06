@@ -42,7 +42,18 @@ class PipelineService:
                             break
                             
                 try:
-                    pipeline = RaptorPipeline()
+                    pipeline = RaptorPipeline(
+                        llm_model=settings.DEFAULT_LLM_MODEL,
+                        summary_model=settings.SUMMARY_MODEL,
+                        summary_max_tokens=settings.SUMMARY_MAX_TOKENS,
+                        summary_max_retries=settings.SUMMARY_MAX_RETRIES,
+                        summary_retry_delay=settings.SUMMARY_RETRY_DELAY,
+                        summary_verify_faithfulness=settings.SUMMARY_VERIFY_FAITHFULNESS,
+                        summary_max_verification_retries=settings.SUMMARY_MAX_VERIFICATION_RETRIES,
+                        enable_web_search=settings.ENABLE_WEB_SEARCH,
+                        web_search_threshold=settings.WEB_SEARCH_THRESHOLD,
+                        web_search_n_results=settings.WEB_SEARCH_N_RESULTS,
+                    )
                     # The path to load is the directory itself
                     pipeline.load(entry_path)
                     

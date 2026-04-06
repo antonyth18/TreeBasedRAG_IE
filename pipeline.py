@@ -163,6 +163,9 @@ class RaptorPipeline:
 
         max_tokens = max_tokens or self.max_tokens
         query_emb  = self._get_embedder().encode_query(query)
+        logger.info(
+            f"Web search fallback | enabled={self.enable_web_search} | threshold={self.web_search_threshold:.3f} | n_results={self.web_search_n_results}"
+        )
 
         # Determine query type using the NLI zero-shot classifier
         if force_strategy:
@@ -424,11 +427,20 @@ class RaptorPipeline:
                 logger.info(
                     f"Web search triggered: best node score {best_score:.3f} < threshold {self.web_search_threshold}"
                 )
+            else:
+                logger.info(
+                    f"Web search skipped: best node score {best_score:.3f} >= threshold {self.web_search_threshold}"
+                )
 
         if not should_search:
             return context
 
-        snippets = self._get_web_searcher().search(query)
+        try:
+            snippets = self._get_web_searcher().search(query)
+        except Exception as e:
+            logger.warning(f"Web search unavailable for '{query[:60]}': {e}")
+            return context
+
         if not snippets:
             return context
 

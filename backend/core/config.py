@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     SUMMARY_VERIFY_FAITHFULNESS: bool = False
     SUMMARY_MAX_VERIFICATION_RETRIES: int = 1
     OLLAMA_NUM_CTX: int = 8192
+
+    # Web search fallback config
+    ENABLE_WEB_SEARCH: bool = True
+    WEB_SEARCH_THRESHOLD: float = 0.75
+    WEB_SEARCH_N_RESULTS: int = 3
     
     class Config:
         case_sensitive = True

@@ -13,4 +13,4 @@ pydantic
 pydantic-settings
 python-multipart
 httpx
-duckduckgo-search>=8.1.1
+ddgs>=9.0.0
