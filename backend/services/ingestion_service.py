@@ -1,6 +1,7 @@
 import os
 import uuid
 import shutil
+import json
 from typing import Optional
 from backend.core.config import settings
 from backend.services.pipeline_service import pipeline_service
@@ -21,10 +22,14 @@ class IngestionService:
         # Use content hash as unique ID to avoid duplicates
         content_hash = hashlib.sha256(file_content).hexdigest()
         document_id = content_hash[:16] # Use a shorter hash for ID
+        metadata_path = os.path.join(settings.DATA_DIR, f"{document_id}.meta.json")
         
         # Check if already in memory
         existing_doc = pipeline_service.get_document_info(document_id)
         if existing_doc and existing_doc["status"] == "completed":
+            if not os.path.exists(metadata_path):
+                with open(metadata_path, "w", encoding="utf-8") as f:
+                    json.dump({"original_filename": filename}, f)
             return document_id
 
         # Save file to data directory (use hash as filename for physical deduplication)
@@ -35,6 +40,11 @@ class IngestionService:
         if not os.path.exists(file_path):
             with open(file_path, "wb") as f:
                 f.write(file_content)
+
+        # Persist a stable display name for startup reloads.
+        if not os.path.exists(metadata_path):
+            with open(metadata_path, "w", encoding="utf-8") as f:
+                json.dump({"original_filename": filename}, f)
         
         # Initialize RaptorPipeline
         pipeline = RaptorPipeline(

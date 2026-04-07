@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # Web search fallback config
     ENABLE_WEB_SEARCH: bool = True
-    WEB_SEARCH_THRESHOLD: float = 0.75
+    WEB_SEARCH_THRESHOLD: float = 0.35
     WEB_SEARCH_N_RESULTS: int = 3
     
     class Config:

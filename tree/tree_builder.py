@@ -29,17 +29,63 @@ _TOKENIZER = tiktoken.get_encoding("cl100k_base")
 CHECKPOINT_PATH = "my_tree/checkpoints.json"
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _summary_concurrency() -> int:
+    configured = os.environ.get("RAPTOR_SUMMARY_CONCURRENCY")
+    if configured is not None:
+        return max(1, _env_int("RAPTOR_SUMMARY_CONCURRENCY", 2))
+    return max(1, _env_int("OLLAMA_NUM_PARALLEL", 2))
+
+
+def _build_context_with_budget(texts: List[str], max_context_tokens: int) -> str:
+    if max_context_tokens <= 0:
+        return "\n\n".join(texts)
+
+    selected: List[str] = []
+    used_tokens = 0
+
+    for text in texts:
+        text_tokens = _count_tokens(text)
+        if used_tokens + text_tokens <= max_context_tokens:
+            selected.append(text)
+            used_tokens += text_tokens
+            continue
+
+        remaining = max_context_tokens - used_tokens
+        if remaining > 0:
+            words = text.split()
+            partial: List[str] = []
+            for word in words:
+                candidate = (" ".join(partial + [word])).strip()
+                candidate_tokens = _count_tokens(candidate)
+                if candidate_tokens > remaining:
+                    break
+                partial.append(word)
+            if partial:
+                selected.append(" ".join(partial))
+        break
+
+    return "\n\n".join(selected)
+
+
 def _count_tokens(text: str) -> int:
     return len(_TOKENIZER.encode(text))
 
 
-async def _summarize_cluster_async(client, semaphore, node_id, texts, summarizer_instance, checkpoints):
+async def _summarize_cluster_async(client, semaphore, node_id, texts, summarizer_instance, checkpoints, base_url):
     # Check if this node_id is already in checkpoint
     if str(node_id) in checkpoints:
         logger.info(f"Skipping summarization for node {node_id} (found in checkpoint).")
         return node_id, checkpoints[str(node_id)], 0
 
-    context = "\n\n".join(texts)
+    max_context_tokens = _env_int("RAPTOR_SUMMARY_CONTEXT_TOKENS", 3000)
+    context = _build_context_with_budget(texts, max_context_tokens)
     model = summarizer_instance.model
     verify = summarizer_instance.verify_faithfulness
     max_verifications = summarizer_instance.max_verification_retries
@@ -57,14 +103,18 @@ async def _summarize_cluster_async(client, semaphore, node_id, texts, summarizer
             # --- GENERATION ---
             for generate_attempt in range(1, summarizer_instance.max_retries + 1):
                 try:
-                    base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
                     response = await client.post(
                         f"{base_url}/api/generate",
                         json={
                             "model": model,
                             "system": _SYSTEM_PROMPT,
                             "prompt": _USER_TEMPLATE.format(context=context),
-                            "stream": False
+                            "stream": False,
+                            "keep_alive": "30m",
+                            "options": {
+                                "temperature": 0,
+                                "num_predict": summarizer_instance.max_summary_tokens,
+                            },
                         },
                         timeout=180.0
                     )
@@ -93,14 +143,18 @@ async def _summarize_cluster_async(client, semaphore, node_id, texts, summarizer
             passed = False
             failed_claim = ""
             try:
-                base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
                 ver_response = await client.post(
                     f"{base_url}/api/generate",
                     json={
                         "model": model,
                         "system": _VERIFICATION_SYSTEM_PROMPT,
                         "prompt": _VERIFICATION_USER_TEMPLATE.format(source=context, summary=summary),
-                        "stream": False
+                        "stream": False,
+                        "keep_alive": "30m",
+                        "options": {
+                            "temperature": 0,
+                            "num_predict": 96,
+                        },
                     },
                     timeout=60.0
                 )
@@ -129,18 +183,11 @@ async def _summarize_cluster_async(client, semaphore, node_id, texts, summarizer
                 f"Hallucinated claim: '{failed_claim}'. Retrying summary..."
             )
 
-        # Append to checkpoint file immediately
-        checkpoints[str(node_id)] = last_summary
-        
-        # Write back checkpoint
-        with open(CHECKPOINT_PATH, "w") as f:
-            json.dump(checkpoints, f, indent=2)
-            
         return node_id, last_summary, total_tokens
 
 
 async def _process_layer_summaries(clusters, start_node_id, summarizer_instance, checkpoints):
-    semaphore = asyncio.Semaphore(2)
+    semaphore = asyncio.Semaphore(_summary_concurrency())
     tasks = []
     
     # We need a stable mapping of node_id to c_nodes
@@ -148,11 +195,25 @@ async def _process_layer_summaries(clusters, start_node_id, summarizer_instance,
     current_id = start_node_id
     
     # One client for all concurrent tasks
-    async with httpx.AsyncClient() as client:
+    base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+    timeout = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=30.0)
+    limits = httpx.Limits(max_connections=max(4, _summary_concurrency() * 2), max_keepalive_connections=4)
+
+    async with httpx.AsyncClient(timeout=timeout, limits=limits) as client:
         for c_nodes in clusters.values():
             texts = [n.text for n in c_nodes]
             node_mapping.append((current_id, c_nodes))
-            tasks.append(_summarize_cluster_async(client, semaphore, current_id, texts, summarizer_instance, checkpoints))
+            tasks.append(
+                _summarize_cluster_async(
+                    client,
+                    semaphore,
+                    current_id,
+                    texts,
+                    summarizer_instance,
+                    checkpoints,
+                    base_url,
+                )
+            )
             current_id += 1
             
         results = await asyncio.gather(*tasks)
@@ -175,6 +236,12 @@ async def _process_layer_summaries(clusters, start_node_id, summarizer_instance,
             token_count=_count_tokens(summary_text),
         )
         new_nodes.append(parent)
+
+        checkpoints[str(node_id)] = summary_text
+
+    # Flush checkpoint once per layer to avoid per-task disk contention.
+    with open(CHECKPOINT_PATH, "w", encoding="utf-8") as f:
+        json.dump(checkpoints, f, indent=2)
         
     return new_nodes, total_layer_tokens
 

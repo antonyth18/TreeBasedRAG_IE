@@ -1,6 +1,7 @@
 import sys
 import os
 import uuid
+import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
@@ -32,12 +33,22 @@ class PipelineService:
             entry_path = os.path.join(settings.TREES_DIR, entry)
             if os.path.isdir(entry_path) and entry.endswith(".json"):
                 document_id = entry.replace(".json", "")
+                metadata_path = os.path.join(settings.DATA_DIR, f"{document_id}.meta.json")
+                original_filename = None
+
+                if os.path.exists(metadata_path):
+                    try:
+                        with open(metadata_path, "r", encoding="utf-8-sig") as f:
+                            metadata = json.load(f)
+                        original_filename = metadata.get("original_filename")
+                    except Exception as e:
+                        print(f"Failed to read metadata for {document_id}: {e}")
                 
                 # Check if we have a corresponding data file
                 data_file = "Unknown Document"
                 if os.path.exists(settings.DATA_DIR):
                     for df in os.listdir(settings.DATA_DIR):
-                        if df.startswith(document_id):
+                        if df.startswith(document_id) and not df.endswith(".meta.json"):
                             data_file = df
                             break
                             
@@ -60,10 +71,13 @@ class PipelineService:
                     # Add to in-memory state
                     # data_file could be "e71e4798d0040713.pdf" or "e71e4798d0040713_datafile1.pdf"
                     filename_display = data_file
-                    if data_file.startswith(document_id):
+                    if original_filename:
+                        filename_display = original_filename
+                    elif data_file.startswith(document_id):
                         # Remove hash and potential underscore
                         filename_display = data_file[len(document_id):].lstrip("_")
-                        if not filename_display: # Case where filename was just the hash
+                        # Fallback when file was stored as <hash>.pdf and stripping leaves only extension.
+                        if not filename_display or filename_display.startswith("."):
                             filename_display = data_file
 
                     self.add_document(
